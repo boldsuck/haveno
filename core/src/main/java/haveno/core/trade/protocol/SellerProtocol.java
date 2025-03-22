@@ -54,8 +54,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SellerProtocol extends DisputeProtocol {
     
-    private static final long RESEND_PAYMENT_RECEIVED_MSGS_AFTER = 1741629525730L; // Mar 10 2025 17:58 UTC
-
     enum SellerEvent implements FluentProtocol.Event {
         STARTUP,
         DEPOSIT_TXS_CONFIRMED,
@@ -100,7 +98,7 @@ public class SellerProtocol extends DisputeProtocol {
     }
 
     private boolean resendPaymentReceivedMessagesEnabled() {
-        return trade.getTakeOfferDate().getTime() > RESEND_PAYMENT_RECEIVED_MSGS_AFTER;
+        return trade.getOffer().getOfferPayload().getProtocolVersion() >= 2;
     }
 
     @Override
@@ -146,7 +144,7 @@ public class SellerProtocol extends DisputeProtocol {
                                 resultHandler.handleResult();
                             }, (errorMessage) -> {
                                 log.warn("Error confirming payment received, reverting state to {}, error={}", Trade.State.BUYER_SENT_PAYMENT_SENT_MSG, errorMessage);
-                                trade.setState(Trade.State.BUYER_SENT_PAYMENT_SENT_MSG);
+                                trade.resetToPaymentSentState();
                                 handleTaskRunnerFault(event, errorMessage);
                             })))
                             .run(() -> trade.advanceState(Trade.State.SELLER_CONFIRMED_PAYMENT_RECEIPT))

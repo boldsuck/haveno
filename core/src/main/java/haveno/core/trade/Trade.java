@@ -46,6 +46,7 @@ import haveno.common.taskrunner.Model;
 import haveno.common.util.Utilities;
 import haveno.core.monetary.Price;
 import haveno.core.monetary.Volume;
+import haveno.core.network.MessageState;
 import haveno.core.offer.Offer;
 import haveno.core.offer.OfferDirection;
 import haveno.core.offer.OpenOffer;
@@ -620,7 +621,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
 
         // skip initialization if trade is complete
         // starting in v1.0.19, seller resends payment received message until acked or stored in mailbox
-        if (isPayoutUnlocked() && isCompleted() && !getProtocol().needsToResendPaymentReceivedMessages()) {
+        if (isFinished()) {
             clearAndShutDown();
             return;
         }
@@ -635,16 +636,20 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             ThreadUtils.execute(() -> onConnectionChanged(connection), getId());
         });
 
-        // reset buyer's payment sent state if no ack receive
-        if (this instanceof BuyerTrade && getState().ordinal() >= Trade.State.BUYER_CONFIRMED_PAYMENT_SENT.ordinal() && getState().ordinal() < Trade.State.BUYER_STORED_IN_MAILBOX_PAYMENT_SENT_MSG.ordinal()) {
-            log.warn("Resetting state of {} {} from {} to {} because no ack was received", getClass().getSimpleName(), getId(), getState(), Trade.State.DEPOSIT_TXS_UNLOCKED_IN_BLOCKCHAIN);
-            setState(Trade.State.DEPOSIT_TXS_UNLOCKED_IN_BLOCKCHAIN);
-        }
+        // reset states if no ack receive
+        if (!isPayoutPublished()) {
 
-        // reset seller's payment received state if no ack receive
-        if (this instanceof SellerTrade && getState().ordinal() >= Trade.State.SELLER_CONFIRMED_PAYMENT_RECEIPT.ordinal() && getState().ordinal() < Trade.State.SELLER_STORED_IN_MAILBOX_PAYMENT_RECEIVED_MSG.ordinal()) {
-            log.warn("Resetting state of {} {} from {} to {} because no ack was received", getClass().getSimpleName(), getId(), getState(), Trade.State.BUYER_SENT_PAYMENT_SENT_MSG);
-            setState(Trade.State.BUYER_SENT_PAYMENT_SENT_MSG);
+            // reset buyer's payment sent state if no ack receive
+            if (this instanceof BuyerTrade && getState().ordinal() >= Trade.State.BUYER_CONFIRMED_PAYMENT_SENT.ordinal() && getState().ordinal() < Trade.State.BUYER_STORED_IN_MAILBOX_PAYMENT_SENT_MSG.ordinal()) {
+                log.warn("Resetting state of {} {} from {} to {} because no ack was received", getClass().getSimpleName(), getId(), getState(), Trade.State.DEPOSIT_TXS_UNLOCKED_IN_BLOCKCHAIN);
+                setState(Trade.State.DEPOSIT_TXS_UNLOCKED_IN_BLOCKCHAIN);
+            }
+    
+            // reset seller's payment received state if no ack receive
+            if (this instanceof SellerTrade && getState().ordinal() >= Trade.State.SELLER_CONFIRMED_PAYMENT_RECEIPT.ordinal() && getState().ordinal() < Trade.State.SELLER_STORED_IN_MAILBOX_PAYMENT_RECEIVED_MSG.ordinal()) {
+                log.warn("Resetting state of {} {} from {} to {} because no ack was received", getClass().getSimpleName(), getId(), getState(), Trade.State.BUYER_SENT_PAYMENT_SENT_MSG);
+                resetToPaymentSentState();
+            }
         }
 
         // handle trade state events
@@ -734,6 +739,15 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             xmrWalletService.addWalletListener(idlePayoutSyncer);
         }
 
+        // TODO: buyer's payment sent message state property became unsynced if shut down while awaiting ack from seller. fixed mismatch in v1.0.19, but can this check can be removed?
+        if (isBuyer()) {
+            MessageState expectedState = getPaymentSentMessageState();
+            if (expectedState != null && expectedState != getSeller().getPaymentSentMessageStateProperty().get()) {
+                log.warn("Updating unexpected payment sent message state for {} {}, expected={}, actual={}", getClass().getSimpleName(), getId(), expectedState, processModel.getPaymentSentMessageStatePropertySeller().get());
+                getSeller().getPaymentSentMessageStateProperty().set(expectedState);
+            }
+        }
+
         // handle confirmations
         walletHeight.addListener((observable, oldValue, newValue) -> {
             importMultisigHexIfScheduled();
@@ -768,6 +782,16 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             tryInitSyncing();
         }
         isFullyInitialized = true;
+    }
+
+    public boolean isFinished() {
+        return isPayoutUnlocked() && isCompleted() && !getProtocol().needsToResendPaymentReceivedMessages();
+    }
+
+    public void resetToPaymentSentState() {
+        setState(Trade.State.BUYER_SENT_PAYMENT_SENT_MSG);
+        for (TradePeer peer : getAllPeers()) peer.setPaymentReceivedMessage(null);
+        setPayoutTxHex(null);
     }
 
     public void reprocessApplicableMessages() {
@@ -1365,7 +1389,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
         MoneroTxSet describedTxSet = wallet.describeTxSet(new MoneroTxSet().setMultisigTxHex(payoutTxHex));
         if (describedTxSet.getTxs() == null || describedTxSet.getTxs().size() != 1) throw new IllegalArgumentException("Bad payout tx"); // TODO (woodser): test nack
         MoneroTxWallet payoutTx = describedTxSet.getTxs().get(0);
-        if (payoutTxId == null) updatePayout(payoutTx); // update payout tx if not signed
+        if (payoutTxId == null) updatePayout(payoutTx); // update payout tx if id currently unknown
 
         // verify payout tx has exactly 2 destinations
         if (payoutTx.getOutgoingTransfer() == null || payoutTx.getOutgoingTransfer().getDestinations() == null || payoutTx.getOutgoingTransfer().getDestinations().size() != 2) throw new IllegalArgumentException("Payout tx does not have exactly two destinations");
@@ -1396,6 +1420,9 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
         BigInteger expectedSellerPayout = sellerDepositAmount.subtract(tradeAmount).subtract(txCostSplit);
         if (!sellerPayoutDestination.getAmount().equals(expectedSellerPayout)) throw new IllegalArgumentException("Seller destination amount is not deposit amount - trade amount - 1/2 tx costs, " + sellerPayoutDestination.getAmount() + " vs " + expectedSellerPayout);
 
+        // update payout tx
+        updatePayout(payoutTx);
+
         // check connection
         boolean doSign = sign && getPayoutTxHex() == null;
         if (doSign || publish) verifyDaemonConnection();
@@ -1404,28 +1431,36 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
         if (doSign) {
 
             // sign tx
+            String signedPayoutTxHex;
             try {
                 MoneroMultisigSignResult result = wallet.signMultisigTxHex(payoutTxHex);
                 if (result.getSignedMultisigTxHex() == null) throw new IllegalArgumentException("Error signing payout tx, signed multisig hex is null");
-                setPayoutTxHex(result.getSignedMultisigTxHex());
+                signedPayoutTxHex = result.getSignedMultisigTxHex();
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
+
+            // verify miner fee is within tolerance unless outdated offer version
+            if (getOffer().getOfferPayload().getProtocolVersion() >= 2) {
+
+                // verify fee is within tolerance by recreating payout tx
+                // TODO (monero-project): creating tx will require exchanging updated multisig hex if message needs reprocessed. provide weight with describe_transfer so fee can be estimated?
+                log.info("Creating fee estimate tx for {} {}", getClass().getSimpleName(), getId());
+                saveWallet(); // save wallet before creating fee estimate tx
+                MoneroTxWallet feeEstimateTx = createPayoutTx();
+                BigInteger feeEstimate = feeEstimateTx.getFee();
+                double feeDiff = payoutTx.getFee().subtract(feeEstimate).abs().doubleValue() / feeEstimate.doubleValue(); // TODO: use BigDecimal?
+                if (feeDiff > XmrWalletService.MINER_FEE_TOLERANCE) throw new IllegalArgumentException("Miner fee is not within " + (XmrWalletService.MINER_FEE_TOLERANCE * 100) + "% of estimated fee, expected " + feeEstimate + " but was " + payoutTx.getFee());
+                log.info("Payout tx fee {} is within tolerance, diff %={}", payoutTx.getFee(), feeDiff);
+            }
+
+            // set signed payout tx hex
+            setPayoutTxHex(signedPayoutTxHex);
 
             // describe result
             describedTxSet = wallet.describeMultisigTxSet(getPayoutTxHex());
             payoutTx = describedTxSet.getTxs().get(0);
             updatePayout(payoutTx);
-
-            // verify fee is within tolerance by recreating payout tx
-            // TODO (monero-project): creating tx will require exchanging updated multisig hex if message needs reprocessed. provide weight with describe_transfer so fee can be estimated?
-            log.info("Creating fee estimate tx for {} {}", getClass().getSimpleName(), getId());
-            saveWallet(); // save wallet before creating fee estimate tx
-            MoneroTxWallet feeEstimateTx = createPayoutTx();
-            BigInteger feeEstimate = feeEstimateTx.getFee();
-            double feeDiff = payoutTx.getFee().subtract(feeEstimate).abs().doubleValue() / feeEstimate.doubleValue(); // TODO: use BigDecimal?
-            if (feeDiff > XmrWalletService.MINER_FEE_TOLERANCE) throw new IllegalArgumentException("Miner fee is not within " + (XmrWalletService.MINER_FEE_TOLERANCE * 100) + "% of estimated fee, expected " + feeEstimate + " but was " + payoutTx.getFee());
-            log.info("Payout tx fee {} is within tolerance, diff %={}", payoutTx.getFee(), feeDiff);
         }
 
         // save trade state
@@ -2049,6 +2084,25 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
         throw new IllegalArgumentException("Trade is not buyer, seller, or arbitrator");
     }
 
+    private MessageState getPaymentSentMessageState() {
+        if (isPaymentReceived()) return MessageState.ACKNOWLEDGED;
+        if (getSeller().getPaymentSentMessageStateProperty().get() == MessageState.ACKNOWLEDGED) return MessageState.ACKNOWLEDGED;
+        switch (state) {
+            case BUYER_SENT_PAYMENT_SENT_MSG:
+                return MessageState.SENT;
+            case BUYER_SAW_ARRIVED_PAYMENT_SENT_MSG:
+                return MessageState.ARRIVED;
+            case BUYER_STORED_IN_MAILBOX_PAYMENT_SENT_MSG:
+                return MessageState.STORED_IN_MAILBOX;
+            case SELLER_RECEIVED_PAYMENT_SENT_MSG:
+                return MessageState.ACKNOWLEDGED;
+            case BUYER_SEND_FAILED_PAYMENT_SENT_MSG:
+                return MessageState.FAILED;
+            default:
+                return null;
+        }
+    }
+
     public String getPeerRole(TradePeer peer) {
         if (peer == getBuyer()) return "Buyer";
         if (peer == getSeller()) return "Seller";
@@ -2171,7 +2225,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
     }
 
     public boolean isPaymentSent() {
-        return getState().getPhase().ordinal() >= Phase.PAYMENT_SENT.ordinal();
+        return getState().getPhase().ordinal() >= Phase.PAYMENT_SENT.ordinal() && getState() != State.BUYER_SEND_FAILED_PAYMENT_SENT_MSG;
     }
 
     public boolean hasPaymentReceivedMessage() {
@@ -2189,7 +2243,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
     }
 
     public boolean isPaymentReceived() {
-        return getState().getPhase().ordinal() >= Phase.PAYMENT_RECEIVED.ordinal();
+        return getState().getPhase().ordinal() >= Phase.PAYMENT_RECEIVED.ordinal() && getState() != State.SELLER_SEND_FAILED_PAYMENT_RECEIVED_MSG;
     }
 
     public boolean isPayoutPublished() {

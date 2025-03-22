@@ -165,7 +165,6 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
             }
         } else if (networkEnvelope instanceof AckMessage) {
             onAckMessage((AckMessage) networkEnvelope, peer);
-            trade.onAckMessage((AckMessage) networkEnvelope, peer); // notify trade listeners
         }
     }
 
@@ -210,11 +209,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
             onMailboxMessage(tradeMessage, mailboxMessage.getSenderNodeAddress());
         } else if (mailboxMessage instanceof AckMessage) {
             AckMessage ackMessage = (AckMessage) mailboxMessage;
-            if (!trade.isCompleted()) {
-                // We only apply the msg if we have not already completed the trade
-                onAckMessage(ackMessage, mailboxMessage.getSenderNodeAddress());
-            }
-            // In any case we remove the msg
+            onAckMessage(ackMessage, mailboxMessage.getSenderNodeAddress());
             processModel.getP2PService().getMailboxMessageService().removeMailboxMsg(ackMessage);
             log.info("Remove {} from the P2P network.", ackMessage.getClass().getSimpleName());
         }
@@ -242,7 +237,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
     protected void onInitialized() {
 
         // listen for direct messages unless completed
-        if (!trade.isCompleted()) processModel.getP2PService().addDecryptedDirectMessageListener(this);
+        if (!trade.isFinished()) processModel.getP2PService().addDecryptedDirectMessageListener(this);
 
         // initialize trade
         synchronized (trade.getLock()) {
@@ -291,10 +286,11 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
     public void maybeReprocessPaymentSentMessage(boolean reprocessOnError) {
         if (trade.isShutDownStarted()) return;
         ThreadUtils.execute(() -> {
+            if (trade.isShutDownStarted()) return;
             synchronized (trade.getLock()) {
 
                 // skip if no need to reprocess
-                if (trade.isBuyer() || trade.getBuyer().getPaymentSentMessage() == null || trade.getState().ordinal() >= Trade.State.BUYER_SENT_PAYMENT_SENT_MSG.ordinal()) {
+                if (trade.isShutDownStarted() || trade.isBuyer() || trade.getBuyer().getPaymentSentMessage() == null || trade.getState().ordinal() >= Trade.State.BUYER_SENT_PAYMENT_SENT_MSG.ordinal()) {
                     return;
                 }
 
@@ -307,10 +303,11 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
     public void maybeReprocessPaymentReceivedMessage(boolean reprocessOnError) {
         if (trade.isShutDownStarted()) return;
         ThreadUtils.execute(() -> {
+            if (trade.isShutDownStarted()) return;
             synchronized (trade.getLock()) {
 
                 // skip if no need to reprocess
-                if (trade.isSeller() || trade.getSeller().getPaymentReceivedMessage() == null || (trade.getState().ordinal() >= Trade.State.SELLER_SENT_PAYMENT_RECEIVED_MSG.ordinal() && trade.isPayoutPublished())) {
+                if (trade.isShutDownStarted() || trade.isSeller() || trade.getSeller().getPaymentReceivedMessage() == null || (trade.getState().ordinal() >= Trade.State.SELLER_SENT_PAYMENT_RECEIVED_MSG.ordinal() && trade.isPayoutPublished())) {
                     return;
                 }
 
@@ -525,7 +522,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
         trade.getBuyer().setPaymentSentMessage(message);
         trade.requestPersistence();
 
-        if (!trade.isInitialized() || trade.isShutDown()) return;
+        if (!trade.isInitialized() || trade.isShutDownStarted()) return;
         if (!(trade instanceof SellerTrade || trade instanceof ArbitratorTrade)) {
             log.warn("Ignoring PaymentSentMessage since not seller or arbitrator");
             return;
@@ -537,7 +534,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
             // TODO A better fix would be to add a listener for the wallet sync state and process
             // the mailbox msg once wallet is ready and trade state set.
             synchronized (trade.getLock()) {
-                if (!trade.isInitialized() || trade.isShutDown()) return;
+                if (!trade.isInitialized() || trade.isShutDownStarted()) return;
                 if (trade.getPhase().ordinal() >= Trade.Phase.PAYMENT_SENT.ordinal()) {
                     log.warn("Received another PaymentSentMessage which was already processed for {} {}, ACKing", trade.getClass().getSimpleName(), trade.getId());
                     handleTaskRunnerSuccess(peer, message);
@@ -604,14 +601,14 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
         trade.getSeller().setPaymentReceivedMessage(message);
         trade.requestPersistence();
 
-        if (!trade.isInitialized() || trade.isShutDown()) return;
+        if (!trade.isInitialized() || trade.isShutDownStarted()) return;
         ThreadUtils.execute(() -> {
             if (!(trade instanceof BuyerTrade || trade instanceof ArbitratorTrade)) {
                 log.warn("Ignoring PaymentReceivedMessage since not buyer or arbitrator");
                 return;
             }
             synchronized (trade.getLock()) {
-                if (!trade.isInitialized() || trade.isShutDown()) return;
+                if (!trade.isInitialized() || trade.isShutDownStarted()) return;
                 latchTrade();
                 Validator.checkTradeId(processModel.getOfferId(), message);
                 processModel.setTradeMessage(message);
@@ -717,6 +714,9 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
 
     private void onAckMessage(AckMessage ackMessage, NodeAddress sender) {
 
+        // ignore if trade is completely finished
+        if (trade.isFinished())  return;
+
         // get trade peer
         TradePeer peer = trade.getTradePeer(sender);
         if (peer == null) {
@@ -789,6 +789,9 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
             log.warn("Received AckMessage with error state for {}, sender={}, trade={} {}, messageUid={}, errorMessage={}", ackMessage.getSourceMsgClassName(), sender, trade.getClass().getSimpleName(), trade.getId(), ackMessage.getSourceUid(), ackMessage.getErrorMessage());
             handleError(ackMessage.getErrorMessage());
         }
+
+        // notify trade listeners
+        trade.onAckMessage(ackMessage, sender);
     }
 
     protected void sendAckMessage(NodeAddress peer, TradeMessage message, boolean result, @Nullable String errorMessage) {

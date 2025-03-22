@@ -737,7 +737,7 @@ public class OpenOfferManager implements PeerManager.Listener, DecryptedDirectMe
         doCancelOffer(openOffer, true);
     }
 
-    // remove open offer which thaws its key images
+    // cancel open offer which thaws its key images
     private void doCancelOffer(@NotNull OpenOffer openOffer, boolean resetAddressEntries) {
         Offer offer = openOffer.getOffer();
         offer.setState(Offer.State.REMOVED);
@@ -1396,6 +1396,32 @@ public class OpenOfferManager implements PeerManager.Listener, DecryptedDirectMe
                 return;
             }
 
+            // verify the trade protocol version
+            if (request.getOfferPayload().getProtocolVersion() != Version.TRADE_PROTOCOL_VERSION) {
+                errorMessage = "Unsupported protocol version: " + request.getOfferPayload().getProtocolVersion();
+                log.warn(errorMessage);
+                sendAckMessage(request.getClass(), peer, request.getPubKeyRing(), request.getOfferId(), request.getUid(), false, errorMessage);
+                return;
+            }
+
+            // verify the min version number
+            if (filterManager.getDisableTradeBelowVersion() != null) {
+                if (Version.compare(request.getOfferPayload().getVersionNr(), filterManager.getDisableTradeBelowVersion()) < 0) {
+                    errorMessage = "Offer version number is too low: " + request.getOfferPayload().getVersionNr() + " < " + filterManager.getDisableTradeBelowVersion();
+                    log.warn(errorMessage);
+                    sendAckMessage(request.getClass(), peer, request.getPubKeyRing(), request.getOfferId(), request.getUid(), false, errorMessage);
+                    return;
+                }
+            }
+
+            // verify the max version number
+            if (Version.compare(request.getOfferPayload().getVersionNr(), Version.VERSION) > 0) {
+                errorMessage = "Offer version number is too high: " + request.getOfferPayload().getVersionNr() + " > " + Version.VERSION;
+                log.warn(errorMessage);
+                sendAckMessage(request.getClass(), peer, request.getPubKeyRing(), request.getOfferId(), request.getUid(), false, errorMessage);
+                return;
+            }
+
             // verify maker and taker fees
             boolean hasBuyerAsTakerWithoutDeposit = offer.getDirection() == OfferDirection.SELL && offer.isPrivateOffer() && offer.getChallengeHash() != null && offer.getChallengeHash().length() > 0 && offer.getTakerFeePct() == 0;
             if (hasBuyerAsTakerWithoutDeposit) {
@@ -1850,27 +1876,20 @@ public class OpenOfferManager implements PeerManager.Listener, DecryptedDirectMe
                         originalOfferPayload.getChallengeHash(),
                         updatedExtraDataMap,
                         protocolVersion,
-                        originalOfferPayload.getArbitratorSigner(),
-                        originalOfferPayload.getArbitratorSignature(),
-                        originalOfferPayload.getReserveTxKeyImages(),
+                        null,
+                        null,
+                        null,
                         originalOfferPayload.getExtraInfo());
 
-                // Save states from original data to use for the updated
-                Offer.State originalOfferState = originalOffer.getState();
-                OpenOffer.State originalOpenOfferState = originalOpenOffer.getState();
+                // cancel old offer
+                log.info("Canceling outdated offer id={}", originalOffer.getId());
+                doCancelOffer(originalOpenOffer, false);
 
-                // remove old offer
-                originalOffer.setState(Offer.State.REMOVED);
-                originalOpenOffer.setState(OpenOffer.State.CANCELED);
-                removeOpenOffer(originalOpenOffer);
-
-                // Create new Offer
+                // create new offer
                 Offer updatedOffer = new Offer(updatedPayload);
                 updatedOffer.setPriceFeedService(priceFeedService);
-                updatedOffer.setState(originalOfferState);
 
                 OpenOffer updatedOpenOffer = new OpenOffer(updatedOffer, originalOpenOffer.getTriggerPrice());
-                updatedOpenOffer.setState(originalOpenOfferState);
                 addOpenOffer(updatedOpenOffer);
                 requestPersistence();
 
