@@ -3,9 +3,9 @@ name: ACAB
 on:
   workflow_dispatch:
   push:
-    branches: [ haveno-reto, dev ]
+    branches: [ haveno-reto-dev ]
   pull_request:
-    branches: [ haveno-reto ]
+    branches: [ haveno-reto-dev ]
     paths-ignore:
       - '**/README.md'
 
@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: haveno-seednode-tar
-          path: seednode/build/distributions/seednode.tar
+          path: seednode/build/distributions/seednode.tar.zip
       - name: Install dependencies
         if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
