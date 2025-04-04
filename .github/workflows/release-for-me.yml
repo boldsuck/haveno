@@ -1,8 +1,7 @@
-name: ACAFB
 # GitHub Releases requires a tag
-# :~$ git tag -s 1.0.19-1 -m "haveno-v1.0.19-1"
+# :~$ git tag -s 1.0.19-1 -m "haveno-reto-v1.0.19-1-devel"
 # :~$ git push origin 1.0.19-1
-# :~$ git push
+name: ACAFB
 
 on:
   push:
