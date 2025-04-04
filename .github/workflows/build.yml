@@ -102,14 +102,14 @@ jobs:
       # win
       - uses: actions/upload-artifact@v4
         name: "Windows artifacts"
-        if: ${{ matrix.os == 'windows-latest'}}
+        if: ${{ matrix.os == 'windows-latest' }}
         with:
           name: haveno-windows
           path: ${{ github.workspace }}/release-windows
       # macos
       - uses: actions/upload-artifact@v4
         name: "macOS artifacts"
-        if: ${{ matrix.os == 'macos-13'  }}
+        if: ${{ matrix.os == 'macos-13' }}
         with:
           name: haveno-macos
           path: ${{ github.workspace }}/release-macos
