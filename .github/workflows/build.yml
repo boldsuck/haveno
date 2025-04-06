@@ -72,10 +72,9 @@ jobs:
           "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
         shell: powershell
 
-      - name: Move Release Files on Unix
-        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-13' }}
+      - name: Move Release Files for Linux
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
-          if [ "${{ matrix.os }}" == "ubuntu-22.04" ]; then
             mkdir ${{ github.workspace }}/release-linux-rpm
             mkdir ${{ github.workspace }}/release-linux-deb
             mkdir ${{ github.workspace }}/release-linux-flatpak
@@ -88,18 +87,22 @@ jobs:
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-rpm
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-appimage
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-flatpak
-          else
+        shell: bash
+      - name: Move Release Files for macOS
+        if: ${{ matrix.os == 'macos-13' }}
+        run: |
             mkdir ${{ github.workspace }}/release-macos
             mv desktop/build/temp-*/binaries/Haveno-*.dmg ${{ github.workspace }}/release-macos/haveno-v${{ env.VERSION }}-macos-installer.dmg
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-macos
-          fi
+            cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/macos-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
         shell: bash
       - name: Move Release Files on Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           mkdir ${{ github.workspace }}/release-windows
           Move-Item -Path desktop\build\temp-*/binaries\Haveno-*.exe -Destination ${{ github.workspace }}/release-windows/haveno-v${{ env.VERSION }}-windows-installer.exe
-          Move-Item -Path desktop\build\temp-*/binaries\desktop-*.jar.SHA-256 -Destination ${{ github.workspace }}/release-windows
+          Copy-Item -Path desktop\build\temp-*/binaries\desktop-*.jar.SHA-256 -Destination ${{ github.workspace }}/release-windows
+          Move-Item -Path desktop\build\temp-*/binaries\desktop-*.jar.SHA-256 -Destination ${{ github.workspace }}/windows-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
         shell: powershell
 
       # win
@@ -123,6 +126,7 @@ jobs:
         with:
           name: haveno-linux-deb
           path: ${{ github.workspace }}/release-linux-deb
+
       - uses: actions/upload-artifact@v4
         name: "Linux - rpm artifact"
         if: ${{ matrix.os == 'ubuntu-22.04' }}
@@ -155,8 +159,9 @@ jobs:
             ${{ github.workspace }}/release-linux-appimage/haveno-v${{ env.VERSION }}-linux-x86_64.AppImage
             ${{ github.workspace }}/release-linux-flatpak/haveno-v${{ env.VERSION }}-linux-x86_64.flatpak
             ${{ github.workspace }}/release-macos/haveno-v${{ env.VERSION }}-macos-installer.dmg
+            ${{ github.workspace }}/macos-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
             ${{ github.workspace }}/release-windows/haveno-v${{ env.VERSION }}-windows-installer.exe
-
+            ${{ github.workspace }}/windows-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
 
 # https://git-scm.com/docs/git-tag      - git-tag Docu
 #
