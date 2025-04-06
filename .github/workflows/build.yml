@@ -1,3 +1,6 @@
+# GitHub Releases requires a tag
+# :~$ git tag -s 1.0.19-1 -m "haveno-v1.0.19-1"
+# :~$ git push origin 1.0.19-1
 name: CI
 
 on:
@@ -102,14 +105,14 @@ jobs:
       # win
       - uses: actions/upload-artifact@v4
         name: "Windows artifacts"
-        if: ${{ matrix.os == 'windows-latest'}}
+        if: ${{ matrix.os == 'windows-latest' }}
         with:
           name: haveno-windows
           path: ${{ github.workspace }}/release-windows
       # macos
       - uses: actions/upload-artifact@v4
         name: "macOS artifacts"
-        if: ${{ matrix.os == 'macos-13'  }}
+        if: ${{ matrix.os == 'macos-13' }}
         with:
           name: haveno-macos
           path: ${{ github.workspace }}/release-macos
@@ -140,3 +143,25 @@ jobs:
         with:
           name: haveno-linux-flatpak
           path: ${{ github.workspace }}/release-linux-flatpak
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ github.workspace }}/desktop/build/temp-*/binaries/desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
+            ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
+            ${{ github.workspace }}/release-linux-rpm/haveno-v${{ env.VERSION }}-linux-x86_64-installer.rpm
+            ${{ github.workspace }}/release-linux-appimage/haveno-v${{ env.VERSION }}-linux-x86_64.AppImage
+            ${{ github.workspace }}/release-linux-flatpak/haveno-v${{ env.VERSION }}-linux-x86_64.flatpak
+            ${{ github.workspace }}/release-macos/haveno-v${{ env.VERSION }}-macos-installer.dmg
+            ${{ github.workspace }}/release-windows/haveno-v${{ env.VERSION }}-windows-installer.exe
+
+
+# https://git-scm.com/docs/git-tag      - git-tag Docu
+#
+# git tag                   - lists all local tags
+# git tag -d 1.0.19-1       - delete local tag
+#
+# git ls-remote --tags      - lists all remote tags
+# git push origin --delete refs/tags/v1.0.19-1      - delete remote tag
