@@ -87,6 +87,7 @@ jobs:
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-rpm
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-appimage
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-flatpak
+            cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/linux-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
         shell: bash
       - name: Move Release Files for macOS
         if: ${{ matrix.os == 'macos-13' }}
@@ -153,11 +154,11 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            ${{ github.workspace }}/desktop/build/temp-*/binaries/desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
             ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
             ${{ github.workspace }}/release-linux-rpm/haveno-v${{ env.VERSION }}-linux-x86_64-installer.rpm
             ${{ github.workspace }}/release-linux-appimage/haveno-v${{ env.VERSION }}-linux-x86_64.AppImage
             ${{ github.workspace }}/release-linux-flatpak/haveno-v${{ env.VERSION }}-linux-x86_64.flatpak
+            ${{ github.workspace }}/linux-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
             ${{ github.workspace }}/release-macos/haveno-v${{ env.VERSION }}-macos-installer.dmg
             ${{ github.workspace }}/macos-desktop-${{ env.VERSION }}-SNAPSHOT-all.jar.SHA-256
             ${{ github.workspace }}/release-windows/haveno-v${{ env.VERSION }}-windows-installer.exe
