@@ -1,11 +1,12 @@
+# GitHub Releases requires a tag, e.g:
+#  git tag -s 1.0.19-1-reto -m "haveno-reto-v1.0.19-1-devel"
+#  git push origin 1.0.19-1-reto
 name: ACAB
 
 on:
   workflow_dispatch:
   push:
-    branches: [ haveno-reto-dev ]
   pull_request:
-    branches: [ haveno-reto-dev ]
     paths-ignore:
       - '**/README.md'
 
@@ -40,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: haveno-seednode-tar
-          path: seednode/build/distributions/seednode.tar
+          path: seednode/build/distributions/
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -98,3 +99,14 @@ jobs:
         with:
           name: haveno-linux-flatpak
           path: ${{ github.workspace }}/release-linux-flatpak
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+#         target_commitish: haveno-reto-dev
+          files: |
+            seednode/build/distributions/*
+            ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
+
+#           ${{ github.workspace }}/release-linux-deb/*
