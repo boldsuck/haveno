@@ -173,6 +173,11 @@ abstract class OfferBookViewModel extends ActivatableViewModel {
 
         tradeCurrencyListChangeListener = c -> fillCurrencies();
 
+        // refresh filter on changes
+        offerBook.getOfferBookListItems().addListener((ListChangeListener<OfferBookListItem>) c -> {
+            filterOffers();
+        });
+
         filterItemsListener = c -> {
             final Optional<OfferBookListItem> highestAmountOffer = filteredItems.stream()
                     .max(Comparator.comparingLong(o -> o.getOffer().getAmount().longValueExact()));
@@ -597,9 +602,28 @@ abstract class OfferBookViewModel extends ActivatableViewModel {
             nextPredicate = nextPredicate.or(offerBookListItem ->
                     offerBookListItem.getOffer().getId().toLowerCase().contains(filterText.toLowerCase()));
 
-            // filter payment method
+            // filter full payment method
             nextPredicate = nextPredicate.or(offerBookListItem ->
                     Res.get(offerBookListItem.getOffer().getPaymentMethod().getId()).toLowerCase().contains(filterText.toLowerCase()));
+
+            // filter short payment method
+            nextPredicate = nextPredicate.or(offerBookListItem -> {
+                return getPaymentMethod(offerBookListItem).toLowerCase().contains(filterText.toLowerCase());
+            });
+
+            // filter currencies
+            nextPredicate = nextPredicate.or(offerBookListItem -> {
+                return offerBookListItem.getOffer().getCurrencyCode().toLowerCase().contains(filterText.toLowerCase()) ||
+                        offerBookListItem.getOffer().getBaseCurrencyCode().toLowerCase().contains(filterText.toLowerCase()) ||
+                        CurrencyUtil.getNameAndCode(offerBookListItem.getOffer().getCurrencyCode()).toLowerCase().contains(filterText.toLowerCase()) ||
+                        CurrencyUtil.getNameAndCode(offerBookListItem.getOffer().getBaseCurrencyCode()).toLowerCase().contains(filterText.toLowerCase());
+            });
+
+            // filter extra info
+            nextPredicate = nextPredicate.or(offerBookListItem -> {
+                return offerBookListItem.getOffer().getCombinedExtraInfo() != null &&
+                        offerBookListItem.getOffer().getCombinedExtraInfo().toLowerCase().contains(filterText.toLowerCase());
+            });
 
             filteredItems.setPredicate(predicate.and(nextPredicate));
         } else {
@@ -711,6 +735,6 @@ abstract class OfferBookViewModel extends ActivatableViewModel {
     abstract String getCurrencyCodeFromPreferences(OfferDirection direction);
 
     public OpenOffer getOpenOffer(Offer offer) {
-        return openOfferManager.getOpenOfferById(offer.getId()).orElse(null);
+        return openOfferManager.getOpenOffer(offer.getId()).orElse(null);
     }
 }

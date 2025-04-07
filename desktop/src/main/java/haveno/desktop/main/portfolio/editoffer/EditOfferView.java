@@ -19,6 +19,8 @@ package haveno.desktop.main.portfolio.editoffer;
 
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
+
+import haveno.common.UserThread;
 import haveno.common.util.Tuple4;
 import haveno.core.locale.CurrencyUtil;
 import haveno.core.locale.Res;
@@ -140,6 +142,7 @@ public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
 
         initWithData(openOffer.getOffer().getDirection(),
                 CurrencyUtil.getTradeCurrency(openOffer.getOffer().getCurrencyCode()).get(),
+                false,
                 null);
 
         model.onStartEditOffer(errorMessage -> {
@@ -205,25 +208,34 @@ public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
                 cancelButton.setDisable(true);
                 busyAnimation.play();
                 spinnerInfoLabel.setText(Res.get("editOffer.publishOffer"));
-                //edit offer
+
+                // edit offer
                 model.onPublishOffer(() -> {
-                    String key = "editOfferSuccess";
-                    if (DontShowAgainLookup.showAgain(key)) {
-                        new Popup()
-                                .feedback(Res.get("editOffer.success"))
-                                .dontShowAgainId(key)
-                                .show();
+                    if (model.dataModel.hasConflictingClone()) {
+                        new Popup().warning(Res.get("editOffer.hasConflictingClone")).show();
+                    } else {
+                        String key = "editOfferSuccess";
+                        if (DontShowAgainLookup.showAgain(key)) {
+                            new Popup()
+                                    .feedback(Res.get("editOffer.success"))
+                                    .dontShowAgainId(key)
+                                    .show();
+                        }
                     }
-                    spinnerInfoLabel.setText("");
-                    busyAnimation.stop();
-                    close();
+                    UserThread.execute(() -> {
+                        spinnerInfoLabel.setText("");
+                        busyAnimation.stop();
+                        close();
+                    });
                 }, (message) -> {
-                    log.error(message);
-                    spinnerInfoLabel.setText("");
-                    busyAnimation.stop();
-                    model.isNextButtonDisabled.setValue(false);
-                    cancelButton.setDisable(false);
-                    new Popup().warning(Res.get("editOffer.failed", message)).show();
+                    UserThread.execute(() -> {
+                        log.error(message);
+                        spinnerInfoLabel.setText("");
+                        busyAnimation.stop();
+                        model.isNextButtonDisabled.setValue(false);
+                        cancelButton.setDisable(false);
+                        new Popup().warning(Res.get("editOffer.failed", message)).show();
+                    });
                 });
             }
         });
