@@ -808,6 +808,7 @@ public final class XmrConnectionService {
 
                 // connected to daemon
                 isConnected = true;
+                connectionServiceError.set(null);
 
                 // determine if blockchain is syncing locally
                 boolean blockchainSyncing = lastInfo.getHeight().equals(lastInfo.getHeightWithoutBootstrap()) || (lastInfo.getTargetHeight().equals(0l) && lastInfo.getHeightWithoutBootstrap().equals(0l)); // blockchain is syncing if height equals height without bootstrap, or target height and height without bootstrap both equal 0
@@ -884,7 +885,7 @@ public final class XmrConnectionService {
     }
 
     private boolean isFixedConnection() {
-        return !"".equals(config.xmrNode) && !fallbackApplied;
+        return !"".equals(config.xmrNode) && (!HavenoUtils.isLocalHost(config.xmrNode) || !xmrLocalNode.shouldBeIgnored()) && !fallbackApplied;
     }
 
     private boolean isCustomConnections() {
