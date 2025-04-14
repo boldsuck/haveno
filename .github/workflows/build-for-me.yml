@@ -1,23 +1,21 @@
+# GitHub Releases requires a tag, e.g:
+#  git tag -s 1.0.19-1-reto -m "haveno-reto-v1.0.19-1"
+#  git push origin 1.0.19-1-reto
 name: ACAB
 
 on:
   workflow_dispatch:
   push:
-    branches: [ haveno-reto, dev ]
   pull_request:
-    branches: [ haveno-reto ]
     paths-ignore:
       - '**/README.md'
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [ubuntu-22.04]
-      fail-fast: false
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: Set up JDK 21
@@ -31,7 +29,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: error-reports-${{ matrix.os }}
+          name: error-reports
           path: ${{ github.workspace }}/desktop/build/reports
       - name: cache nodes dependencies
         uses: actions/upload-artifact@v4
@@ -45,7 +43,6 @@ jobs:
           name: haveno-seednode-tar
           path: seednode/build/distributions/seednode.tar
       - name: Install dependencies
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm libfuse2 flatpak flatpak-builder appstream
@@ -58,13 +55,11 @@ jobs:
 
       # get version from jar
       - name: Set Version Unix
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
           export VERSION=$(ls desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 | grep -Eo 'desktop-[0-9]+\.[0-9]+\.[0-9]+' | sed 's/desktop-//')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Move Release Files on Unix
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
             mkdir ${{ github.workspace }}/release-linux-rpm
             mkdir ${{ github.workspace }}/release-linux-deb
@@ -83,27 +78,35 @@ jobs:
       # linux
       - uses: actions/upload-artifact@v4
         name: "Linux - deb artifact"
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         with:
           name: haveno-linux-deb
           path: ${{ github.workspace }}/release-linux-deb
+
       - uses: actions/upload-artifact@v4
         name: "Linux - rpm artifact"
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         with:
           name: haveno-linux-rpm
           path: ${{ github.workspace }}/release-linux-rpm
 
       - uses: actions/upload-artifact@v4
         name: "Linux - AppImage artifact"
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         with:
           name: haveno-linux-appimage
           path: ${{ github.workspace }}/release-linux-appimage
 
       - uses: actions/upload-artifact@v4
         name: "Linux - flatpak artifact"
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         with:
           name: haveno-linux-flatpak
           path: ${{ github.workspace }}/release-linux-flatpak
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+#         target_commitish: haveno-reto
+          files: |
+            seednode/build/distributions/seednode.tar
+            ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
+
+#           ${{ github.workspace }}/release-linux-deb/*
