@@ -113,8 +113,4 @@ jobs:
 #           ${{ github.workspace }}/release-linux-deb/*
       - name: Checksums
         uses: thewh1teagle/checksum@v2
-        with:
-          patterns: |
-            *.deb
-            *.tar
           algorithm: sha256
