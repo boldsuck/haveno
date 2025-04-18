@@ -143,7 +143,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
     private static final long DELETE_AFTER_NUM_BLOCKS = 2; // if deposit requested but not published
     private static final long EXTENDED_RPC_TIMEOUT = 600000; // 10 minutes
     private static final long DELETE_AFTER_MS = TradeProtocol.TRADE_STEP_TIMEOUT_SECONDS;
-    private static final int NUM_CONFIRMATIONS_FOR_SCHEDULED_IMPORT = 10;
+    private static final int NUM_CONFIRMATIONS_FOR_SCHEDULED_IMPORT = 5;
     protected final Object pollLock = new Object();
     protected static final Object importMultisigLock = new Object();
     private boolean pollInProgress;
@@ -753,11 +753,9 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             importMultisigHexIfScheduled();
         });
 
-        // trade is initialized
-        isInitialized = true;
-
         // done if deposit not requested or payout unlocked
         if (!isDepositRequested() || isPayoutUnlocked()) {
+            isInitialized = true;
             isFullyInitialized = true;
             return;
         }
@@ -769,13 +767,16 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             if (payoutTx != null && payoutTx.getNumConfirmations() >= XmrWalletService.NUM_BLOCKS_UNLOCK) {
                 log.warn("Payout state for {} {} is {} but payout is unlocked, updating state", getClass().getSimpleName(), getId(), getPayoutState());
                 setPayoutStateUnlocked();
+                isInitialized = true;
                 isFullyInitialized = true;
                 return;
             } else {
-                log.warn("Missing trade wallet for {} {}, state={}, marked completed={}", getClass().getSimpleName(), getShortId(), getState(), isCompleted());
-                return;
+                throw new RuntimeException("Missing trade wallet for " + getClass().getSimpleName() + " " + getShortId() + ", state=" + getState() + ", marked completed=" + isCompleted());
             }
         }
+
+        // trade is initialized
+        isInitialized = true;
 
         // init syncing if deposit requested
         if (isDepositRequested()) {
@@ -1121,8 +1122,8 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             if (!isInitialized || isShutDownStarted) return;
             synchronized (getLock()) {
                 if (processModel.isImportMultisigHexScheduled()) {
+                    importMultisigHex();
                     processModel.setImportMultisigHexScheduled(false);
-                    ThreadUtils.submitToPool(() -> importMultisigHex());
                 }
             }
         }, getId());
@@ -1607,13 +1608,11 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
             }
 
             // shut down trade threads
-            synchronized (getLock()) {
-                isInitialized = false;
-                isShutDown = true;
-                List<Runnable> shutDownThreads = new ArrayList<>();
-                shutDownThreads.add(() -> ThreadUtils.shutDown(getId()));
-                ThreadUtils.awaitTasks(shutDownThreads);
-            }
+            isInitialized = false;
+            isShutDown = true;
+            List<Runnable> shutDownThreads = new ArrayList<>();
+            shutDownThreads.add(() -> ThreadUtils.shutDown(getId()));
+            ThreadUtils.awaitTasks(shutDownThreads);
 
             // save and close
             if (wallet != null) {
@@ -2513,7 +2512,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
         try {
             syncWallet(pollWallet);
         } catch (Exception e) {
-            if (!isShutDown && walletExists()) {
+            if (!isShutDownStarted && walletExists()) {
                 log.warn("Error syncing trade wallet for {} {}: {}", getClass().getSimpleName(), getId(), e.getMessage());
             }
         }
@@ -2543,7 +2542,7 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
     
             if (pollWallet) doPollWallet();
         } catch (Exception e) {
-            ThreadUtils.execute(() -> requestSwitchToNextBestConnection(sourceConnection), getId());
+            if (!isShutDownStarted) ThreadUtils.execute(() -> requestSwitchToNextBestConnection(sourceConnection), getId());
             throw e;
         }
     }
@@ -2730,7 +2729,10 @@ public abstract class Trade extends XmrWalletBase implements Tradable, Model {
                 }
             }
         } catch (Exception e) {
-            if (HavenoUtils.isUnresponsive(e)) forceRestartTradeWallet();
+            if (HavenoUtils.isUnresponsive(e)) {
+                if (isShutDownStarted) forceCloseWallet();
+                else forceRestartTradeWallet();
+            }
             else {
                 boolean isWalletConnected = isWalletConnectedToDaemon();
                 if (wallet != null && !isShutDownStarted && isWalletConnected) {
