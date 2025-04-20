@@ -112,5 +112,8 @@ jobs:
 
 #           ${{ github.workspace }}/release-linux-deb/*
       - name: Checksums
-        uses: thewh1teagle/checksum@v2
-          algorithm: sha256
+        uses: wangzuo/action-release-checksums@v1
+#        uses: thewh1teagle/checksum@v2
+#        with:
+#          patterns: *.deb
+#          algorithm: sha256
