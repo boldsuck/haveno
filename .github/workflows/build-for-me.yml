@@ -109,8 +109,6 @@ jobs:
           files: |
             seednode/build/distributions/seednode.tar
             ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
-
-#           ${{ github.workspace }}/release-linux-deb/*
       - name: Checksums
         uses: wangzuo/action-release-checksums@v1
 #        uses: thewh1teagle/checksum@v2
