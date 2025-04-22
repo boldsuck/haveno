@@ -151,8 +151,13 @@ jobs:
 
       - name: Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.ref_type == 'tag'
+#        if: startsWith(github.ref, 'refs/tags/')
         with:
+#          name:        Name of the release. defaults to tag name
+#          tag_name:    Name of a tag. defaults to github.ref_name
+          draft: true
+#          prerelease: true
           files: |
             ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
             ${{ github.workspace }}/release-linux-rpm/haveno-v${{ env.VERSION }}-linux-x86_64-installer.rpm
@@ -163,6 +168,16 @@ jobs:
             ${{ github.workspace }}/haveno-v${{ env.VERSION }}-macos-SNAPSHOT-all.jar.SHA-256
             ${{ github.workspace }}/release-windows/haveno-v${{ env.VERSION }}-windows-installer.exe
             ${{ github.workspace }}/haveno-v${{ env.VERSION }}-windows-SNAPSHOT-all.jar.SHA-256
+
+      - name: Checksums
+        uses: thewh1teagle/checksum@v2
+        with:
+#          patterns: |
+#             *.deb
+#             *.rpm
+          algorithm: sha256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # https://git-scm.com/docs/git-tag      - git-tag Docu
 #
