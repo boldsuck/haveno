@@ -1,6 +1,6 @@
 # GitHub Releases requires a tag, e.g:
-#  git tag -s 1.0.19-1-reto -m "haveno-reto-v1.0.19-1"
-#  git push origin 1.0.19-1-reto
+#  git tag -s 1.1.0-1-reto -m "haveno-reto-v1.1.0-1"
+#  git push origin 1.1.0-1-reto
 name: ACAB
 
 on:
@@ -108,7 +108,7 @@ jobs:
 #          name:        Name of the release. defaults to tag name
 #          tag_name:    Name of a tag. defaults to github.ref_name
 #          draft: true
-          prerelease: true
+#          prerelease: true
           files: |
             seednode/build/distributions/seednode.tar
             ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
