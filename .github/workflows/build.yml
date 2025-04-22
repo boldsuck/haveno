@@ -1,6 +1,6 @@
 # GitHub Releases requires a tag, e.g:
-#  git tag -s 1.0.19-1 -m "haveno-v1.0.19-1"
-#  git push origin 1.0.19-1
+#  git tag -s 1.1.0-1-reto -m "haveno-reto-v1.1.0-1"
+#  git push origin 1.1.0-1-reto
 name: CI
 
 on:
