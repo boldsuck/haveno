@@ -1,6 +1,6 @@
 # GitHub Releases requires a tag, e.g:
-#  git tag -s 1.0.19-1-reto -m "haveno-reto-v1.0.19-1-devel"
-#  git push origin 1.0.19-1-reto
+#  git tag -s 1.1.0-1-reto-dev -m "haveno-reto-v1.1.0-1-devel"
+#  git push origin 1.1.0-1-reto-dev
 name: ACAB
 
 on:

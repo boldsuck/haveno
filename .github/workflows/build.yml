@@ -1,6 +1,6 @@
 # GitHub Releases requires a tag, e.g:
-#  git tag -s 1.0.19-1 -m "haveno-v1.0.19-1"
-#  git push origin 1.0.19-1
+#  git tag -s 1.1.0-1-reto-dev -m "haveno-reto-v1.1.0-1-devel"
+#  git push origin 1.1.0-1-reto-dev
 name: CI
 
 on:
@@ -170,6 +170,7 @@ jobs:
             ${{ github.workspace }}/haveno-v${{ env.VERSION }}-windows-SNAPSHOT-all.jar.SHA-256
 
       - name: Checksums
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         uses: thewh1teagle/checksum@v2
         with:
 #          patterns: |
