@@ -804,15 +804,15 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
                 else {
                     log.warn("We received a NACK for our PaymentReceivedMessage to the buyer for {} {}", trade.getClass().getSimpleName(), trade.getId());
                     
-                    // update multisig hex
+                    // nack includes updated multisig hex since v1.1.1
                     if (ackMessage.getUpdatedMultisigHex() != null) {
                         trade.getBuyer().setUpdatedMultisigHex(ackMessage.getUpdatedMultisigHex());
-                    }
 
-                    // reset state if not processed
-                    if (trade.isPaymentReceived() && !trade.isPayoutPublished() && !isPaymentReceivedMessageAckedByEither()) {
-                        log.warn("Resetting state to payment sent for {} {}", trade.getClass().getSimpleName(), trade.getId());
-                        trade.resetToPaymentSentState();
+                        // reset state if not processed
+                        if (trade.isPaymentReceived() && !trade.isPayoutPublished() && !isPaymentReceivedMessageAckedByEither()) {
+                            log.warn("Resetting state to payment sent for {} {}", trade.getClass().getSimpleName(), trade.getId());
+                            trade.resetToPaymentSentState();
+                        }
                     }
                 }
                 processModel.getTradeManager().requestPersistence();
@@ -826,15 +826,15 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
                 if (!ackMessage.isSuccess()) {
                     log.warn("We received a NACK for our PaymentReceivedMessage to the arbitrator for {} {}", trade.getClass().getSimpleName(), trade.getId());
 
-                    // update multisig hex
+                    // nack includes updated multisig hex since v1.1.1
                     if (ackMessage.getUpdatedMultisigHex() != null) {
                         trade.getArbitrator().setUpdatedMultisigHex(ackMessage.getUpdatedMultisigHex());
-                    }
 
-                    // reset state if not processed
-                    if (trade.isPaymentReceived() && !trade.isPayoutPublished() && !isPaymentReceivedMessageAckedByEither()) {
-                        log.warn("Resetting state to payment sent for {} {}", trade.getClass().getSimpleName(), trade.getId());
-                        trade.resetToPaymentSentState();
+                        // reset state if not processed
+                        if (trade.isPaymentReceived() && !trade.isPayoutPublished() && !isPaymentReceivedMessageAckedByEither()) {
+                            log.warn("Resetting state to payment sent for {} {}", trade.getClass().getSimpleName(), trade.getId());
+                            trade.resetToPaymentSentState();
+                        }
                     }
                 }
                 processModel.getTradeManager().requestPersistence();
@@ -849,7 +849,7 @@ public abstract class TradeProtocol implements DecryptedDirectMessageListener, D
             log.info("Received AckMessage for {}, sender={}, trade={} {}, messageUid={}", ackMessage.getSourceMsgClassName(), sender, trade.getClass().getSimpleName(), trade.getId(), ackMessage.getSourceUid());
         } else {
             log.warn("Received AckMessage with error state for {}, sender={}, trade={} {}, messageUid={}, errorMessage={}", ackMessage.getSourceMsgClassName(), sender, trade.getClass().getSimpleName(), trade.getId(), ackMessage.getSourceUid(), ackMessage.getErrorMessage());
-            handleError(ackMessage.getErrorMessage());
+            handleError("Your peer had a problem processing your message. Please ensure you and your peer are running the latest version and try again.\n\nError details:\n" + ackMessage.getErrorMessage());
         }
 
         // notify trade listeners
