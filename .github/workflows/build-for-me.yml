@@ -61,18 +61,19 @@ jobs:
 
       - name: Move Release Files on Unix
         run: |
-            mkdir ${{ github.workspace }}/release-linux-rpm
             mkdir ${{ github.workspace }}/release-linux-deb
-            mkdir ${{ github.workspace }}/release-linux-flatpak
+            mkdir ${{ github.workspace }}/release-linux-rpm
             mkdir ${{ github.workspace }}/release-linux-appimage
-            mv desktop/build/temp-*/binaries/haveno-*.rpm ${{ github.workspace }}/release-linux-rpm/haveno-v${{ env.VERSION }}-linux-x86_64-installer.rpm
+            mkdir ${{ github.workspace }}/release-linux-flatpak
             mv desktop/build/temp-*/binaries/haveno_*.deb ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
-            mv desktop/build/temp-*/binaries/*.flatpak ${{ github.workspace }}/release-linux-flatpak/haveno-v${{ env.VERSION }}-linux-x86_64.flatpak
+            mv desktop/build/temp-*/binaries/haveno-*.rpm ${{ github.workspace }}/release-linux-rpm/haveno-v${{ env.VERSION }}-linux-x86_64-installer.rpm
             mv desktop/build/temp-*/binaries/haveno_*.AppImage ${{ github.workspace }}/release-linux-appimage/haveno-v${{ env.VERSION }}-linux-x86_64.AppImage
+            mv desktop/build/temp-*/binaries/*.flatpak ${{ github.workspace }}/release-linux-flatpak/haveno-v${{ env.VERSION }}-linux-x86_64.flatpak
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-deb
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-rpm
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-appimage
             cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/release-linux-flatpak
+            cp desktop/build/temp-*/binaries/desktop-*.jar.SHA-256 ${{ github.workspace }}/haveno-v${{ env.VERSION }}-linux-x86_64-SNAPSHOT-all.jar.SHA-256
         shell: bash
 
       # linux
@@ -103,25 +104,26 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
-#        if: startsWith(github.ref, 'refs/tags/')
         with:
 #          name:        Name of the release. defaults to tag name
 #          tag_name:    Name of a tag. defaults to github.ref_name
-          draft: true
+#          draft: true
 #          prerelease: true
+          target_commitish: haveno-reto-dev
           files: |
             seednode/build/distributions/seednode.tar
             ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
-
+            ${{ github.workspace }}/haveno-v${{ env.VERSION }}-linux-x86_64-SNAPSHOT-all.jar.SHA-256
 #           ${{ github.workspace }}/release-linux-deb/*
 
       - name: Checksums
 #        uses: jmgilman/actions-generate-checksum@v1
         uses: thewh1teagle/checksum@v2
+        if: github.ref_type == 'tag'
         with:
-#          patterns: |
-#             *.deb
-#             *.tar
+          patterns: |
+             *.deb
+             *.tar
           algorithm: sha256
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

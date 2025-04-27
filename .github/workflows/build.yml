@@ -152,11 +152,11 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
-#        if: startsWith(github.ref, 'refs/tags/')
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         with:
 #          name:        Name of the release. defaults to tag name
 #          tag_name:    Name of a tag. defaults to github.ref_name
-          draft: true
+#          draft: true
 #          prerelease: true
           files: |
             ${{ github.workspace }}/release-linux-deb/haveno-v${{ env.VERSION }}-linux-x86_64-installer.deb
@@ -164,14 +164,23 @@ jobs:
             ${{ github.workspace }}/release-linux-appimage/haveno-v${{ env.VERSION }}-linux-x86_64.AppImage
             ${{ github.workspace }}/release-linux-flatpak/haveno-v${{ env.VERSION }}-linux-x86_64.flatpak
             ${{ github.workspace }}/haveno-v${{ env.VERSION }}-linux-x86_64-SNAPSHOT-all.jar.SHA-256
+
+        if: ${{ matrix.os == 'macos-13' }}
+        with:
+          files: |
             ${{ github.workspace }}/release-macos/haveno-v${{ env.VERSION }}-macos-installer.dmg
             ${{ github.workspace }}/haveno-v${{ env.VERSION }}-macos-SNAPSHOT-all.jar.SHA-256
+
+        if: ${{ matrix.os == 'windows-latest' }}
+        with:
+          files: |
             ${{ github.workspace }}/release-windows/haveno-v${{ env.VERSION }}-windows-installer.exe
             ${{ github.workspace }}/haveno-v${{ env.VERSION }}-windows-SNAPSHOT-all.jar.SHA-256
 
       - name: Checksums
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
         uses: thewh1teagle/checksum@v2
+        if: github.ref_type == 'tag'
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         with:
 #          patterns: |
 #             *.deb
